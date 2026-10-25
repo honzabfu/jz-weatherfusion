@@ -1,8 +1,7 @@
 # Adding a data source
 
-How to wire a new weather provider into the aggregator. The two intended next
-sources — **Windy** and **Tomorrow.io** — already have their API-key UI and
-config slots in place, so most of the work is the source module itself.
+How to wire a new weather provider into the aggregator. Open-Meteo, OWM,
+Windy and Tomorrow.io are already implemented; their modules provide examples.
 
 ## What's already wired (don't redo)
 - `apiKeys.windy` / `apiKeys.tomorrow` slots — [src/lib/config.js](../src/lib/config.js)
@@ -21,6 +20,7 @@ a `<NAME>_META` object. A **reading** is a `StationReading`:
   stationId:   String,          // unique per data point
   stationName: String,          // shown in Stations tab
   source:      '<name>',        // matches the apiKeys/status key
+  sourceType:  'model',         // 'station' for physical sensors
   fetchedAt:   new Date().toISOString(),
   lat, lon,                     // optional, for distance filtering
   metrics: {
@@ -46,7 +46,8 @@ for anything the provider doesn't supply.
 Model it on [owm.js](../src/lib/sources/owm.js) (single endpoint) or
 [openmeteo.js](../src/lib/sources/openmeteo.js) (multiple parallel fetches with
 `Promise.allSettled`). Rules:
-- Signature `fetch<Name>(lat, lon, apiKey, radiusKm)`.
+- Signature `fetch<Name>(lat, lon, apiKey, radiusKm, signal)`.
+- Forward the optional final `AbortSignal` to every HTTP `fetch` call.
 - **Never throw past the function** — catch network errors, push human-readable
   strings into `errors`, return whatever readings you got (see owm.js).
 - Map provider fields → SI metrics with `?? null`.
@@ -59,7 +60,7 @@ Append one entry to the `SOURCES` array:
   key: '<name>',                 // status / config / i18n id
   labelKey: 'source<Name>',      // i18n key for the display name
   apiKeyName: '<name>' | null,   // key in config.apiKeys, or null if keyless
-  fetch: (loc, apiKeys) => fetch<Name>(loc.lat, loc.lon, apiKeys.<name>),
+  fetch: (loc, apiKeys, signal) => fetch<Name>(loc.lat, loc.lon, apiKeys.<name>, loc.radiusKm, signal),
   // Optional: post-process readings, e.g. tag as approximate so they show
   // in Stations but stay out of the aggregate.
   // tagReadings: (readings, opts) => readings,
@@ -67,11 +68,12 @@ Append one entry to the `SOURCES` array:
 ```
 `useWeather` iterates this list, runs every active source in parallel via
 `Promise.allSettled`, initializes status (`'no-key'` when `apiKeyName` is set
-but the key is empty, otherwise `'loading'`), and feeds the readings into
-`aggregate`. No edits to `useWeather.js` itself.
+but the key is empty, otherwise `'loading'`), and retains the original readings for local preference-driven aggregation.
+The request signal is passed to every registry entry. No edits to `useWeather.js` itself.
 
-If your source needs a key, also add `apiKeys.<name>` to the refetch-trigger
-dependency array at the bottom of `useWeather.js` so toggling the key refetches.
+The weather query identity derives provider keys from the registry, so adding
+`apiKeyName` also wires up refetching when that key changes. No manual dependency
+array edits are needed.
 
 No change needed in [aggregate.js](../src/lib/aggregate.js) or
 [App.jsx](../src/App.jsx) — readings flow through automatically and the source

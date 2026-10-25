@@ -7,16 +7,17 @@ const BASE = 'https://api.openweathermap.org/data/2.5/find'
  * @param {number} lon
  * @param {string} apiKey
  * @param {number} radiusKm
+ * @param {AbortSignal} [signal]
  * @returns {Promise<{ readings: StationReading[], errors: string[] }>}
  */
-export async function fetchOWM(lat, lon, apiKey, radiusKm = 10) {
+export async function fetchOWM(lat, lon, apiKey, radiusKm = 10, signal) {
   if (!apiKey) return { readings: [], errors: ['No OWM API key'] }
 
   const url = `${BASE}?lat=${lat}&lon=${lon}&cnt=10&units=metric&appid=${apiKey}`
 
   let data
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal })
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) throw new Error(`Invalid API key (HTTP ${res.status})`)
       if (res.status === 429) throw new Error(`Rate limit exceeded (HTTP 429)`)

@@ -17,15 +17,17 @@ const PARAMS = [
  * @param {number} lat
  * @param {number} lon
  * @param {string} apiKey
+ * @param {AbortSignal} [signal]
  * @returns {Promise<{ readings: StationReading[], errors: string[] }>}
  */
-export async function fetchWindy(lat, lon, apiKey) {
+export async function fetchWindy(lat, lon, apiKey, signal) {
   if (!apiKey) return { readings: [], errors: ['No Windy API key'] }
 
   let data
   try {
     const res = await fetch(BASE, {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         lat:        Number(lat),

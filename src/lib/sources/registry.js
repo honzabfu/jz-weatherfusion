@@ -15,7 +15,7 @@ import { fetchWindy } from './windy.js'
  * @property {string} key           Stable id used for status, config and i18n.
  * @property {string} labelKey      i18n key for the human-readable name.
  * @property {string|null} apiKeyName  Key in `config.apiKeys`, or null if none.
- * @property {(location: object, apiKeys: object) => Promise<{readings: object[], errors: string[]}>} fetch
+ * @property {(location: object, apiKeys: object, signal?: AbortSignal) => Promise<{readings: object[], errors: string[]}>} fetch
  * @property {(readings: object[], opts: object) => object[]} [tagReadings]  Optional post-processing.
  */
 
@@ -25,25 +25,25 @@ export const SOURCES = [
     key: 'open-meteo',
     labelKey: 'sourceOpenMeteo',
     apiKeyName: null,
-    fetch: (loc) => fetchOpenMeteo(loc.lat, loc.lon),
+    fetch: (loc, apiKeys, signal) => fetchOpenMeteo(loc.lat, loc.lon, signal),
   },
   {
     key: 'owm',
     labelKey: 'sourceOWM',
     apiKeyName: 'owm',
-    fetch: (loc, apiKeys) => fetchOWM(loc.lat, loc.lon, apiKeys.owm, loc.radiusKm),
+    fetch: (loc, apiKeys, signal) => fetchOWM(loc.lat, loc.lon, apiKeys.owm, loc.radiusKm, signal),
   },
   {
     key: 'tomorrow',
     labelKey: 'sourceTomorrow',
     apiKeyName: 'tomorrow',
-    fetch: (loc, apiKeys) => fetchTomorrow(loc.lat, loc.lon, apiKeys.tomorrow),
+    fetch: (loc, apiKeys, signal) => fetchTomorrow(loc.lat, loc.lon, apiKeys.tomorrow, signal),
   },
   {
     key: 'windy',
     labelKey: 'sourceWindy',
     apiKeyName: 'windy',
-    fetch: (loc, apiKeys) => fetchWindy(loc.lat, loc.lon, apiKeys.windy),
+    fetch: (loc, apiKeys, signal) => fetchWindy(loc.lat, loc.lon, apiKeys.windy, signal),
     // Free-tier Windy data is deliberately shuffled; tag it so the aggregate
     // excludes it while the Stations table still shows it (≈).
     tagReadings: (readings, { windyKeyFree }) =>
