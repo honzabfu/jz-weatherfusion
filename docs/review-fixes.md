@@ -16,3 +16,28 @@ Apply in priority order; do not merge or deploy until regression checks pass.
 Validation: `npm run test:run`, `npm run build`, `git diff --check`.
 Browser verification uses a production preview with mocked weather endpoints;
 no real API keys or geolocation are required.
+
+## Implemented and verified
+
+All six fixes are implemented on `fix/review-weather-state-config`.
+
+- 89 Vitest tests pass (36 existing, 53 new), including real React hook lifecycle
+  tests with mocked providers/GPS and a provider abort propagation test.
+- Against the review baseline, 13 of the 15 new hook tests fail; with the fixes,
+  all pass.
+- Production build passes, including service worker generation.
+- `scripts/verify-review-fixes.mjs` passes 21 browser assertions in Chromium,
+  with no uncaught page errors. Covers location switching/failure/detail scope,
+  editing coordinates, deleting locations, preference changes without fetching,
+  invalid/malicious file imports and recovery from invalid stored configuration.
+- The browser checks mock API responses and do not validate live provider CORS
+  or real-device geolocation/Safari behavior.
+
+Reproduce the browser checks after building and starting `npm run preview`:
+
+```sh
+npx playwright install chromium
+node scripts/verify-review-fixes.mjs
+```
+
+`BASE_URL` and `CHROMIUM_PATH` can override the preview URL and browser binary.

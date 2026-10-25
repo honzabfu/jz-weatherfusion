@@ -9,6 +9,7 @@ Personal Weather Station aggregator. Client-only React + Vite PWA, deployed to G
 - `npm run build` — output to `dist/`
 - `npm run preview` — preview built output
 - `npm test` — Vitest watch mode; `npm run test:run` for a single CI-style run
+- `node scripts/verify-review-fixes.mjs` — production UI regressions against `npm run preview` (Playwright Chromium, mocked APIs)
 
 Tests cover aggregation, units, config validation/prototype safety and provider cancellation in `src/lib/` and the React lifecycle in `src/hooks/useWeather.test.js` (react-test-renderer, mocked providers/GPS). No linter is configured.
 
