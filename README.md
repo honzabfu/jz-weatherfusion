@@ -2,11 +2,14 @@
 
 🇬🇧 [English](#english) · 🇨🇿 [Česky](#česky)
 
----
+Developer guides: [setup, tests and deployment](docs/development.md) ·
+[adding a source](docs/adding-a-data-source.md) · [agent instructions](CLAUDE.md).
 
 ## English
 
-Personal weather station aggregator. Collects readings from physical stations and NWP models, filters outliers, and displays a fused average in a clean interface. Client-only React PWA — all config (API keys, locations) stays in your browser's `localStorage` and is sent only to the respective weather APIs.
+Weather aggregator combining current-weather API entries and numerical weather
+prediction (NWP) models. It filters outliers and displays aggregated metrics.
+Client-only React PWA, hosted on GitHub Pages.
 
 **Live app:** https://honzabfu.github.io/jz-weatherfusion/
 
@@ -17,96 +20,114 @@ Personal weather station aggregator. Collects readings from physical stations an
 | ![Aggregated — light](docs/screenshots/light-aggregated.png) | ![Stations — light](docs/screenshots/light-stations.png) | ![Sources — light](docs/screenshots/light-sources.png) |
 | ![Aggregated — dark](docs/screenshots/dark-aggregated.png) | ![Stations — dark](docs/screenshots/dark-stations.png) | ![Sources — dark](docs/screenshots/dark-sources.png) |
 
-### Quick start
+### Quick start and locations
 
-1. Open the app at the link above.
-2. Click **Add location** (or the + icon) and search by place name, or enter coordinates manually.
-3. The app immediately fetches data from Open-Meteo (no key needed) and shows model-based readings.
-4. For readings from real physical weather stations, add an **OpenWeatherMap** API key in **Settings → API Keys**. This is the most important step — without it, all values come from NWP forecast models, not actual sensors.
+1. Open the app and choose **Add location** to search by name or enter coordinates.
+2. Open-Meteo works without a key and supplies model-based values immediately.
+3. Add optional OpenWeatherMap, Tomorrow.io or Windy keys in **Settings → API Keys**.
+   Check **Sources** for actual availability, errors and the last fetch time.
+
+To follow your device, manually add **📡 My current position**. Each refresh
+resolves geolocation; the app keeps the last coordinates and an optional place
+name. Geolocation requires browser permission. This location is not created by
+default. Auto-refresh defaults to 30 minutes; stale data is also refreshed when
+the app returns to the foreground. Editing fixed coordinates or the search
+radius triggers a new fetch.
 
 ### Tabs
 
 | Tab | Description |
-|-----|-------------|
-| **Aggregated** | Fused values — physical stations are preferred; NWP models are used as fallback when no stations are available. Shows how many sources contributed to the average. |
-| **Stations** | Individual station breakdown — what was used, what was excluded and why. |
-| **Sources** | Status of each data source, error messages, and last fetch time. |
+| --- | --- |
+| **Aggregated** | Filtered metric values and contributor counts; a model tag identifies per-metric fallback. |
+| **Stations** | Individual provider entries, status indicators, distances for entries classified as stations, and details. |
+| **Sources** | Provider status, errors, last fetch time and a debug log. |
 
 ### Data sources
 
-Sources fall into two categories:
+| Source | API key | Current behavior |
+| --- | --- | --- |
+| **Open-Meteo** | None | Three model queries (`best_match`, ICON, ECMWF); maps UV when available. Best-match may overlap another requested model. |
+| **OpenWeatherMap** | Required | Up to ten nearby current-weather entries, filtered by radius. The app classifies them as `station` and prefers them in aggregation. |
+| **Tomorrow.io** | Required | Realtime model data, classified as `model`. |
+| **Windy** | Required | GFS model via Point Forecast API. Free-tier preference defaults on: marks readings approximate (≈) and excludes them. Disable it for a suitable key to allow normal model participation. |
 
-- **Physical stations** — on-site sensor readings; most accurate for local conditions.
-- **NWP models** — numerical weather prediction on a grid; values represent a large area, not a specific point.
+The app's OWM **station** label does not guarantee an individual physical PWS
+sensor. [OWM describes its current-weather product](https://openweathermap.org/current)
+as combining models, satellites, radar and weather stations. Treat provider
+classification and actual sensor provenance separately; no fixed accuracy
+advantage is guaranteed.
 
-| Source | Type | API key | Description |
-|--------|------|---------|-------------|
-| **OpenWeatherMap** ⭐ | Physical stations | required (free) | **Recommended.** The only source of real on-site sensor readings from citizen weather stations (PWS) within a configurable radius. Without this key, all values come from forecast models only. |
-| **Open-Meteo** | NWP model | not required | 3 models (best\_match, ICON, ECMWF); includes UV index. Active by default — no setup needed. |
-| **Tomorrow.io** | NWP model | required (free) | Hybrid model (NWP + satellite + radar) |
-| **Windy** | NWP model | required (free) | GFS 0.25° model; data tagged as approximate (≈) and always excluded from the average |
+Get keys and check current plan limits at [OpenWeatherMap](https://openweathermap.org/api),
+[Tomorrow.io](https://www.tomorrow.io) and [Windy Point Forecast](https://api.windy.com/point-forecast).
+Windy free-tier data are intended for testing and may be deliberately modified.
+Browser CORS and provider plans can limit access. Windy time-series unit handling
+also has a known discrepancy: [#59](https://github.com/honzabfu/jz-weatherfusion/issues/59).
 
-> **Why OpenWeatherMap matters:** It is the only source that reads actual sensor data from physical weather stations near you. NWP models (Open-Meteo, Tomorrow.io, Windy) interpolate values over a large grid area (1–28 km), which can differ from real local conditions by 10–20 % in temperature and humidity. Physical stations measure the air right where they stand.
+### Filtering and aggregation
 
-#### Where to get API keys
+1. **Exclude approximate readings.** They remain visible in Stations.
+2. **Prefer entries tagged `station`.** Without them, use non-approximate models.
+   If the preferred entries have no values for a scalar metric (for example UV),
+   models fill that metric; the card shows a model tag.
+3. **Filter each metric with IQR**, then average surviving values. Wind direction
+   uses a circular mean of the preferred pool, without IQR or per-metric fallback.
 
-- **OpenWeatherMap** — https://openweathermap.org/api (free tier: 60 req/min)
-- **Tomorrow.io** — https://www.tomorrow.io (free plan available — see tomorrow.io for current limits)
-- **Windy** — https://api.windy.com/point-forecast (free tier: testing only, data deliberately shuffled/modified — 500 req/day)
-
-Keys are entered in **Settings → API Keys** and stored exclusively in your browser's `localStorage` — they are never sent anywhere else.
-
-### Settings
-
-Open settings with the gear icon in the top right.
-
-| Option | Description |
-|--------|-------------|
-| **Language** | English / Czech / Spanish |
-| **Theme** | Light / Dark / System |
-| **Font size** | Small / Medium / Large |
-| **Units** | Metric (°C, hPa, m/s, mm) or Imperial (°F, inHg, mph, in) |
-| **Wind display** | m/s, km/h, mph, Beaufort scale, or combined |
-| **IQR factor** | Outlier filtering strictness (1.0 = strict, 3.0 = lenient) |
-| **Auto-refresh** | Auto-refresh every 5 / 15 / 30 min or disabled |
-| **API Keys** | Keys for OpenWeatherMap, Tomorrow.io and Windy |
-| **Export / Import** | Back up and restore the full config as JSON |
-
-### How filtering and aggregation works
-
-Aggregation happens in two steps:
-
-**1. Source type selection**
-
-Physical stations (OpenWeatherMap) measure actual on-site conditions, while NWP models work on a 1–28 km grid and interpolate values. Humidity and temperature can systematically differ by 10–20 %, with physical stations being more accurate for local conditions.
-
-- If physical stations are available, the average is computed **exclusively from them**.
-- If no physical stations are configured (no OWM key, or none within the search radius), NWP models are used as fallback.
-
-**2. IQR outlier filter**
-
-Within the selected sources, an IQR (interquartile range) filter is applied — stations with a significantly different value are flagged as outliers and excluded from the average. The arithmetic mean of the remaining values is computed (circular mean for wind direction).
-
-The IQR factor can be adjusted in settings — lower is stricter, higher is more lenient.
-
-**Indicators in the Stations tab**
+IQR and Windy free-tier changes recompute existing data immediately without
+fetching again. Contributor counts describe each metric, not a count of
+independent weather providers. The table's outlier marker is based on
+**temperature**; other metrics are filtered independently.
 
 | Symbol | Meaning |
-|--------|---------|
-| ● | Included in average |
-| ○ | Excluded as outlier (IQR) |
-| ◇ | NWP model excluded — physical stations take priority |
-| ≈ | Approximate (Windy free tier) — always excluded |
+| --- | --- |
+| ● | In the preferred pool, not a temperature outlier. |
+| ○ | Temperature outlier; other metrics may still contribute. |
+| ◇ | Outside the preferred pool; may still fill a missing scalar metric. |
+| ≈ | Approximate reading, excluded from every aggregate. |
 
-### PWA — installation
+### Settings and stored data
 
-The app is fully functional as a Progressive Web App. Click **Install app** (Chrome/Edge) or **Add to Home Screen** (Safari/iOS) and JZ WeatherFusion will run as a standalone app, including offline (shows last fetched data).
+| Option | Choices / behavior |
+| --- | --- |
+| **Language** | Automatic browser detection (default), English, Czech, Spanish. |
+| **Theme** | Light / Dark / System. |
+| **Font size** | Small / Medium / Large / Extra large. |
+| **Icon set** | Standard / Modern / Playful. |
+| **Units** | Metric or imperial for temperature, pressure, precipitation and distance. Wind has its own display setting. |
+| **Wind display** | m/s, km/h, mph, Beaufort, or combined m/s + Beaufort. |
+| **IQR factor** | 1.0–3.0; lower is stricter, default 1.5. |
+| **Auto-refresh** | 5 / 15 / 30 minutes or off; default 30 minutes. |
+| **API Keys** | OpenWeatherMap, Tomorrow.io, Windy; Windy free-tier switch. |
+| **Export / Import** | Full configuration as JSON, including API keys; invalid imports leave the existing config unchanged. |
+
+Configuration is stored in browser `localStorage`; the full config is not sent to
+a server. Weather requests send coordinates and the relevant provider key.
+Place-name search uses Open-Meteo geocoding; reverse geocoding sends coordinates
+to BigDataCloud. Successful weather GET requests may also be stored in the
+service worker's Cache Storage, including API-key-bearing request URLs. Keep
+exported config files private. Weather results themselves are not saved in
+`localStorage`. Invalid stored config resets to defaults; missing fields in older
+valid configs receive defaults.
+
+### PWA, updates and offline use
+
+Install through your browser's install action or **Add to Home Screen** on iOS.
+Settings shows an install action when the browser's install prompt is available.
+When a new service worker is detected, use the **Update** banner to load it.
+
+The app shell is cached after successful service-worker installation. Weather GET
+responses use a network-first cache with a 5-minute lifetime and up to 20 entries
+per provider. Offline reload can display usable cached responses; it is not a
+permanent history of all fetched weather. A failed same-query refresh can retain
+the last successful in-memory result. Windy's POST is not cached by the current
+GET rule. Geolocation, place search and uncached/expired requests may fail offline.
 
 ---
 
 ## Česky
 
-Agregátor dat z více meteorologických zdrojů. Aplikace sbírá měření ze stanic i numerických modelů, filtruje odlehlé hodnoty a zobrazuje jejich průměr v přehledném rozhraní. Čistě klientská React PWA — veškerá konfigurace (API klíče, lokality) zůstává v `localStorage` vašeho prohlížeče a odesílá se pouze na příslušná API.
+Agregátor aktuálních dat z meteorologických API a numerických modelů (NWP).
+Filtruje odlehlé hodnoty a zobrazuje agregované metriky. Čistě klientská React PWA
+hostovaná na GitHub Pages.
 
 **Živá aplikace:** https://honzabfu.github.io/jz-weatherfusion/
 
@@ -117,87 +138,102 @@ Agregátor dat z více meteorologických zdrojů. Aplikace sbírá měření ze 
 | ![Průměr — světlý](docs/screenshots/light-aggregated.png) | ![Stanice — světlý](docs/screenshots/light-stations.png) | ![Zdroje — světlý](docs/screenshots/light-sources.png) |
 | ![Průměr — tmavý](docs/screenshots/dark-aggregated.png) | ![Stanice — tmavý](docs/screenshots/dark-stations.png) | ![Zdroje — tmavý](docs/screenshots/dark-sources.png) |
 
-### Rychlý start
+### Rychlý start a lokality
 
-1. Otevřete aplikaci na adrese výše.
-2. Klikněte na **Přidat lokalitu** (nebo ikonu +) a vyhledejte místo jménem, nebo zadejte zeměpisné souřadnice.
-3. Aplikace okamžitě načte data z Open-Meteo (bez klíče) a zobrazí hodnoty z modelů.
-4. Pro data ze skutečných fyzických stanic přidejte klíč **OpenWeatherMap** v **Nastavení → API klíče**. Jde o nejdůležitější krok — bez něj pocházejí všechny hodnoty jen z NWP modelů, nikoli ze skutečných senzorů.
+1. Otevřete aplikaci a přes **Přidat lokalitu** vyhledejte místo nebo zadejte souřadnice.
+2. Open-Meteo funguje bez klíče a ihned poskytne modelová data.
+3. Volitelné klíče OpenWeatherMap, Tomorrow.io a Windy přidejte v **Nastavení → API klíče**.
+   Skutečnou dostupnost, chyby a čas načtení ověříte v záložce **Zdroje**.
+
+Pro sledování zařízení ručně přidejte **📡 Moje aktuální poloha**. Při každém
+obnovení aplikace zjišťuje polohu; uchovává poslední souřadnice a případně název
+místa. Je potřeba povolení geolokace v prohlížeči. Dynamická lokalita se sama
+nevytváří. Výchozí interval obnovení je 30 minut; zastaralá data se obnoví také
+při návratu do aplikace. Úprava pevných souřadnic nebo poloměru spustí nové načtení.
 
 ### Záložky
 
 | Záložka | Popis |
-|---------|-------|
-| **Průměr** | Průměrné hodnoty — preferuje fyzické stanice; při jejich absenci použije NWP modely jako zálohu. Zobrazuje, z kolika zdrojů průměr pochází. |
-| **Stanice** | Přehled jednotlivých stanic — co bylo použito, co bylo vyloučeno a proč. |
-| **Zdroje** | Stav jednotlivých datových zdrojů, chybové hlášky, čas posledního načtení. |
+| --- | --- |
+| **Průměr** | Filtrované metriky a počty přispívajících hodnot; štítek modelu označuje doplnění konkrétní metriky. |
+| **Stanice** | Jednotlivé položky poskytovatelů, jejich stav, vzdálenost položek označených jako stanice a detail. |
+| **Zdroje** | Stav poskytovatelů, chyby, čas načtení a diagnostický log. |
 
 ### Datové zdroje
 
-Zdroje jsou rozděleny do dvou kategorií:
+| Zdroj | API klíč | Aktuální chování |
+| --- | --- | --- |
+| **Open-Meteo** | Není potřeba | Tři modelové dotazy (`best_match`, ICON, ECMWF); UV, pokud je dostupné. Best-match může odpovídat i jinému dotazovanému modelu. |
+| **OpenWeatherMap** | Vyžadován | Až deset okolních položek aktuálního počasí, filtrovaných podle poloměru. Aplikace je označuje `station` a upřednostňuje v agregaci. |
+| **Tomorrow.io** | Vyžadován | Realtime modelová data označená jako `model`. |
+| **Windy** | Vyžadován | GFS přes Point Forecast API. Výchozí přepínač bezplatného tarifu označí data jako přibližná (≈) a vyloučí je. Jeho vypnutí pro odpovídající klíč umožní běžnou účast v modelovém průměru. |
 
-- **Fyzické stanice** — měří přímo na místě senzorem; nejpřesnější pro lokální podmínky.
-- **NWP modely** — numerická předpověď počasí na mřížce; hodnoty reprezentují velkou plochu, nikoli konkrétní bod.
+Označení OWM jako **stanice** nezaručuje měření z jednotlivého fyzického PWS
+senzoru. [OWM popisuje aktuální počasí](https://openweathermap.org/current) jako
+kombinaci modelů, satelitů, radaru a meteorologických stanic. Klasifikace v aplikaci
+je odlišná od prokázaného původu měření; nelze slíbit obecnou výhodu v přesnosti.
 
-| Zdroj | Typ | API klíč | Popis |
-|-------|-----|----------|-------|
-| **OpenWeatherMap** ⭐ | Fyzické stanice | vyžadován (zdarma) | **Doporučeno.** Jediný zdroj skutečných senzorových dat z občanských meteorologických stanic (PWS) v okolí zadané polohy. Bez tohoto klíče pocházejí všechny hodnoty pouze z modelů. |
-| **Open-Meteo** | NWP model | nevyžadován | 3 modely (best\_match, ICON, ECMWF); poskytuje i UV index. Aktivní výchozí, bez nastavení. |
-| **Tomorrow.io** | NWP model | vyžadován (zdarma) | Hybridní model (NWP + satelit + radar) |
-| **Windy** | NWP model | vyžadován (zdarma) | GFS model 0,25°; data označena jako přibližná (≈) a z agregace vždy vyloučena |
+Klíče a aktuální limity tarifů: [OpenWeatherMap](https://openweathermap.org/api),
+[Tomorrow.io](https://www.tomorrow.io), [Windy Point Forecast](https://api.windy.com/point-forecast).
+Data bezplatného Windy tarifu jsou určena k testování a mohou být záměrně změněna.
+Přístup mohou omezovat tarif i CORS v prohlížeči. Výběr časového kroku Windy má
+navíc známý rozpor jednotek: [#59](https://github.com/honzabfu/jz-weatherfusion/issues/59).
 
-> **Proč je OpenWeatherMap klíčový:** Je jediným zdrojem, který čte skutečná senzorová data z fyzických stanic v okolí. NWP modely (Open-Meteo, Tomorrow.io, Windy) interpolují hodnoty na mřížce o rozlišení 1–28 km, což se může od skutečných lokálních podmínek lišit o 10–20 % v teplotě a vlhkosti. Fyzické stanice měří vzduch přímo na místě.
+### Filtrování a agregace
 
-#### Kde získat API klíče
+1. **Vyloučení přibližných dat.** Zůstávají viditelná v záložce Stanice.
+2. **Preference položek označených `station`.** Bez nich se použijí nepřibližné
+   modely. Pokud preferované položky neposkytují některou skalární metriku
+   (například UV), doplní ji modely; karta ji označí štítkem modelu.
+3. **IQR filtr pro každou metriku**, poté průměr zbývajících hodnot. Směr větru
+   používá kruhový průměr preferované skupiny, bez IQR a bez samostatného doplnění
+   z modelů.
 
-- **OpenWeatherMap** — https://openweathermap.org/api (volný tarif: 60 dotazů/min)
-- **Tomorrow.io** — https://www.tomorrow.io (volný plán k dispozici — aktuální limity viz tomorrow.io)
-- **Windy** — https://api.windy.com/point-forecast (volný tarif: pouze pro testování, data záměrně pozměněna — 500 dotazů/den)
-
-Klíče se zadávají v **Nastavení → API klíče** a ukládají se výhradně do `localStorage` vašeho prohlížeče — nikam se neodesílají.
-
-### Nastavení
-
-Nastavení otevřete ikonou ozubeného kola vpravo nahoře.
-
-| Možnost | Popis |
-|---------|-------|
-| **Jazyk** | Angličtina / Čeština / Španělština |
-| **Motiv** | Světlý / Tmavý / Systémový |
-| **Velikost písma** | Malé / Výchozí / Velké |
-| **Jednotky** | Metrické (°C, hPa, m/s, mm) nebo imperiální (°F, inHg, mph, in) |
-| **Zobrazení větru** | m/s, km/h, mph, Beaufortova stupnice nebo kombinovaně |
-| **IQR faktor** | Přísnost filtrace odlehlých hodnot (1,0 = přísné, 3,0 = volné) |
-| **Automatické obnovení** | Obnovení každých 5 / 15 / 30 min nebo manuálně |
-| **API klíče** | Klíče pro OpenWeatherMap, Tomorrow.io a Windy |
-| **Exportovat / Importovat** | Záloha a obnova celé konfigurace jako JSON |
-
-### Jak funguje filtrování a agregace
-
-Agregace probíhá ve dvou krocích:
-
-**1. Výběr zdroje dat**
-
-Fyzické stanice (OpenWeatherMap) měří skutečné podmínky přímo na místě, zatímco NWP modely pracují s mřížkou o rozlišení 1–28 km a hodnoty interpolují. Vlhkost nebo teplota se mezi nimi mohou systematicky lišit o 10–20 %, přičemž fyzické stanice jsou pro lokální podmínky přesnější.
-
-- Pokud jsou k dispozici fyzické stanice, průměr se počítá **výhradně z nich**.
-- Nejsou-li fyzické stanice nakonfigurovány (žádný OWM klíč nebo žádná stanice v daném okruhu), použijí se NWP modely jako záloha.
-
-**2. IQR filtr odlehlých hodnot**
-
-V rámci vybraných zdrojů se aplikuje IQR filtr (mezikvartilové rozpětí) — stanice s výrazně odlišnou hodnotou jsou označeny jako odlehlé a z průměru vyloučeny. Ze zbývajících hodnot se spočítá aritmetický průměr (pro směr větru kruhový průměr).
-
-Faktor IQR lze upravit v nastavení — nižší hodnota je přísnější, vyšší tolerantnější.
-
-**Indikátory v záložce Stanice**
+Změna IQR nebo přepínače Windy ihned přepočítá existující data bez dalších síťových
+dotazů. Počty přispěvatelů se vztahují ke konkrétní metrice, nikoli k nezávislým
+poskytovatelům. Značka odlehlosti v tabulce vychází z **teploty**; ostatní metriky
+se filtrují samostatně.
 
 | Symbol | Význam |
-|--------|--------|
-| ● | Zahrnuto v průměru |
-| ○ | Vyloučeno jako odlehlá hodnota (IQR) |
-| ◇ | NWP model vyloučen — fyzické stanice mají přednost |
-| ≈ | Přibližné (Windy bezplatný tarif) — vždy vyloučeno |
+| --- | --- |
+| ● | V preferované skupině, teplota není označena jako odlehlá. |
+| ○ | Odlehlá teplota; ostatní metriky mohou přispívat. |
+| ◇ | Mimo preferovanou skupinu; může doplňovat chybějící skalární metriku. |
+| ≈ | Přibližná data, vyloučená ze všech agregovaných metrik. |
 
-### PWA — instalace
+### Nastavení a uložená data
 
-Aplikace je plně funkční jako Progressive Web App. Klikněte na **Instalovat aplikaci** (Chrome/Edge) nebo **Přidat na plochu** (Safari/iOS) a JZ WeatherFusion bude fungovat jako samostatná aplikace i bez připojení (zobrazí naposledy načtená data).
+| Možnost | Volby / chování |
+| --- | --- |
+| **Jazyk** | Automaticky podle prohlížeče (výchozí), angličtina, čeština, španělština. |
+| **Motiv** | Světlý / Tmavý / Systémový. |
+| **Velikost písma** | Malé / Výchozí / Velké / Velmi velké. |
+| **Sada ikon** | Standardní / Moderní / Hravá. |
+| **Jednotky** | Metrické nebo imperiální pro teplotu, tlak, srážky a vzdálenost. Vítr má samostatnou volbu. |
+| **Zobrazení větru** | m/s, km/h, mph, Beaufort nebo kombinace m/s + Beaufort. |
+| **IQR faktor** | 1,0–3,0; nižší je přísnější, výchozí 1,5. |
+| **Automatické obnovení** | 5 / 15 / 30 minut nebo vypnuto; výchozí 30 minut. |
+| **API klíče** | OpenWeatherMap, Tomorrow.io, Windy; přepínač bezplatného Windy tarifu. |
+| **Export / Import** | Celá konfigurace v JSON včetně API klíčů; neplatný import ponechá původní konfiguraci. |
+
+Konfigurace je v `localStorage` prohlížeče; jako celek se na server neposílá.
+Meteorologické dotazy odesílají souřadnice a klíč příslušného poskytovatele.
+Vyhledávání míst používá geokódování Open-Meteo; převod souřadnic na název místa
+odesílá souřadnice BigDataCloud. Úspěšné GET dotazy mohou být také v Cache Storage
+service workeru, včetně URL s API klíčem. Exportované soubory uchovávejte soukromě.
+Samotné počasí se do `localStorage` neukládá. Neplatná uložená konfigurace se
+obnoví na výchozí hodnoty; chybějící pole starších platných konfigurací se doplní.
+
+### PWA, aktualizace a offline režim
+
+Aplikaci nainstalujte nabídkou prohlížeče nebo přes **Přidat na plochu** na iOS.
+Nastavení nabídne instalaci, pokud je dostupná instalační událost prohlížeče.
+Při detekci nového service workeru použijte pruh **Aktualizovat**.
+
+Po úspěšné instalaci service workeru je rozhraní v mezipaměti. GET odpovědi počasí
+používají přednostně síť, s mezipamětí na 5 minut a nejvýše 20 položkami na
+poskytovatele. Obnovení offline může zobrazit dostupné odpovědi z mezipaměti;
+nejde o trvalou historii počasí. Při chybě obnovení stejného dotazu lze ponechat
+poslední úspěšný výsledek v paměti otevřené aplikace. Windy POST se současným GET
+pravidlem necachuje. Geolokace, vyhledávání míst a chybějící či expirované odpovědi
+mohou offline selhat.
