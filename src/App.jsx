@@ -216,7 +216,17 @@ export default function App() {
   const [editLoc,         setEditLoc]         = useState(null)
   const [showLog,         setShowLog]         = useState(false)
   const [stationFilter,   setStationFilter]   = useState('all')
-  const [selectedStation, setSelectedStation] = useState(null)
+  const [selection, setSelection] = useState(null)
+  const selectionScope = activeLocation ? JSON.stringify([
+    activeLocation.id, activeLocation.dynamic, activeLocation.lat,
+    activeLocation.lon, activeLocation.radiusKm,
+  ]) : null
+  const selectedStation = selection?.scope === selectionScope
+    ? result?.rawReadings.find(r => r.stationId === selection.stationId && r.source === selection.source)
+    : null
+  const setSelectedStation = (reading) => setSelection(reading ? {
+    scope: selectionScope, stationId: reading.stationId, source: reading.source,
+  } : null)
   // Windy free key is excluded from the aggregate, so it doesn't improve accuracy
   const hasUsefulKey = !!(
     apiKeys.owm ||

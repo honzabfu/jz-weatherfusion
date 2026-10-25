@@ -9,16 +9,17 @@ const BASE = 'https://api.tomorrow.io/v4/weather/realtime'
  * @param {number} lat
  * @param {number} lon
  * @param {string} apiKey
+ * @param {AbortSignal} [signal]
  * @returns {Promise<{ readings: StationReading[], errors: string[] }>}
  */
-export async function fetchTomorrow(lat, lon, apiKey) {
+export async function fetchTomorrow(lat, lon, apiKey, signal) {
   if (!apiKey) return { readings: [], errors: ['No Tomorrow.io API key'] }
 
   const url = `${BASE}?location=${lat},${lon}&units=metric&apikey=${apiKey}`
 
   let data
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal })
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) throw new Error(`Invalid API key (HTTP ${res.status})`)
       if (res.status === 429) throw new Error(`Rate limit exceeded (HTTP 429)`)
