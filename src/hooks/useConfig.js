@@ -1,6 +1,6 @@
 // src/hooks/useConfig.js
 import { useState, useCallback, useEffect } from 'react'
-import { loadConfig, saveConfig, newLocation } from '../lib/config.js'
+import { loadConfig, saveConfig, newLocation, normalizeConfig } from '../lib/config.js'
 
 export function useConfig() {
   const [config, setConfig] = useState(() => loadConfig())
@@ -65,7 +65,7 @@ export function useConfig() {
 
   // ── Import / replace ───────────────────────────────────────────────────────
   const replaceConfig = useCallback((newConfig) => {
-    setConfig(newConfig)
+    setConfig(normalizeConfig(newConfig))
   }, [])
 
   return {

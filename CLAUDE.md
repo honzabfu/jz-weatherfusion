@@ -10,12 +10,12 @@ Personal Weather Station aggregator. Client-only React + Vite PWA, deployed to G
 - `npm run preview` — preview built output
 - `npm test` — Vitest watch mode; `npm run test:run` for a single CI-style run
 
-Tests cover the pure logic in `src/lib/` and the React lifecycle in `src/hooks/useWeather.test.js` (react-test-renderer, mocked providers/GPS). No linter is configured.
+Tests cover aggregation, units, config validation/prototype safety and provider cancellation in `src/lib/` and the React lifecycle in `src/hooks/useWeather.test.js` (react-test-renderer, mocked providers/GPS). No linter is configured.
 
 ## Architecture
 - **Entry:** [src/main.jsx](src/main.jsx) → [src/App.jsx](src/App.jsx). App is a single component with 3 tabs (aggregated / stations / sources).
 - **State via hooks:**
-  - [src/hooks/useConfig.js](src/hooks/useConfig.js) — config persisted to LocalStorage (`pws:config`). Locations carry a `dynamic` flag; a **dynamic location** (added manually via 📡 "My current position", never created by default) has no fixed coordinates — on every refresh `useWeather` resolves the device geolocation and fetches for the current position. Its stored lat/lon is only a last-known cache (`0/0` until first resolved), updated via `updateLocation` after each successful fix.
+  - [src/hooks/useConfig.js](src/hooks/useConfig.js) — config persisted to LocalStorage (`pws:config`). `normalizeConfig` allowlists schema fields and rejects malformed/prototype-related JSON keys. Missing fields receive defaults, invalid stored data falls back to defaults, invalid imports/replacements are rejected before state changes. Locations carry a `dynamic` flag; a **dynamic location** (added manually via 📡 "My current position", never created by default) has no fixed coordinates — on every refresh `useWeather` resolves the device geolocation and fetches for the current position. Its stored lat/lon is only a last-known cache (`0/0` until first resolved), updated via `updateLocation` after each successful fix.
   - [src/hooks/useWeather.js](src/hooks/useWeather.js) — fetch orchestration, source status, debug log, auto-refresh timer. Requests are scoped by location/query inputs, invalidated on replacement/unmount, and pass AbortSignal through the source registry. Raw provider batches are retained so IQR and Windy free-tier tagging recompute locally without fetching. Static coordinate/radius edits refetch; dynamic GPS cache/name writes do not. For a `dynamic` location it calls `getCurrentPosition()` before fetching and reports failures via the returned `geoError`.
   - [src/hooks/useTheme.js](src/hooks/useTheme.js) — light/dark/system.
 - **Sources:** [src/lib/sources/](src/lib/sources/) — each exports `fetch<Source>()` returning `{ readings, errors }` and a `*_META` object. Fetch functions accept an optional final `AbortSignal`; registry entries expose `fetch(location, apiKeys, signal)`.
