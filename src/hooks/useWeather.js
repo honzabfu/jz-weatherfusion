@@ -22,11 +22,12 @@ function geolocateOnce(options) {
 // permission is granted — a standalone PWA does not — so on failure we retry once
 // forcing a fresh high-accuracy fix with a longer timeout. The first attempt is
 // fast and may reuse a recent cached fix for quick successive refreshes.
-async function getCurrentPosition() {
+async function getCurrentPosition(signal) {
   if (!navigator.geolocation) throw new Error('Geolocation not supported')
   try {
     return await geolocateOnce({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 })
   } catch {
+    signal?.throwIfAborted()
     try {
       return await geolocateOnce({ enableHighAccuracy: true, timeout: 25000, maximumAge: 0 })
     } catch (err) {
@@ -49,14 +50,13 @@ export function useWeather(location, apiKeys, iqrFactor, refreshIntervalMin, win
   // that cache (or a label) must not trigger another geolocation/fetch cycle.
   const lat = location?.dynamic ? null : location?.lat
   const lon = location?.dynamic ? null : location?.lon
-  const request = useMemo(() => location ? {
+  const requestKey = JSON.stringify(location ? {
     id: location.id, dynamic: !!location.dynamic, lat, lon,
     radiusKm: location.radiusKm,
     apiKeys: Object.fromEntries(SOURCES.filter(s => s.apiKeyName)
       .map(s => [s.apiKeyName, apiKeys[s.apiKeyName]])),
-  } : null, [location?.id, location?.dynamic, lat, lon, location?.radiusKm,
-    ...SOURCES.filter(s => s.apiKeyName).map(s => apiKeys[s.apiKeyName])])
-  const requestKey = JSON.stringify(request)
+  } : null)
+  const request = useMemo(() => JSON.parse(requestKey), [requestKey])
   const [state, setState] = useState(EMPTY_STATE)
   const abortRef = useRef(null)
   const scopeRef = useRef(requestKey)
@@ -101,14 +101,14 @@ export function useWeather(location, apiKeys, iqrFactor, refreshIntervalMin, win
     }]))
     update(prev => ({
       ...(prev.key === requestKey ? prev : EMPTY_STATE), key: requestKey,
-      sourceStatus: status, loading: true, geoError: null, log: [],
+      sourceStatus: { ...status }, loading: true, geoError: null, log: [],
     }))
 
     let loc = { ...latestRef.current.location, ...request }
     if (request.dynamic) {
       addLog('📍 Resolving current position…')
       try {
-        const pos = await getCurrentPosition()
+        const pos = await getCurrentPosition(controller.signal)
         if (!isCurrent()) return
         loc = { ...loc, ...pos }
         // A newly resolved position must not display the previous fix's data.

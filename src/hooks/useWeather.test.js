@@ -99,6 +99,29 @@ describe('request ownership', () => {
     expect(hook.value.geoError).toBeNull()
   })
 
+  it('does not retry a failed GPS request after its owner has been replaced', async () => {
+    let rejectGPS
+    const getCurrentPosition = vi.fn((ok, fail) => { rejectGPS = fail })
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } })
+    const hook = mount({ location: { ...A, dynamic: true } })
+    hook.update({ location: B })
+    await flush(() => rejectGPS({ code: 2, message: 'unavailable' }))
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+    expect(hook.value.geoError).toBeNull()
+  })
+
+  it('retains Safari retry for an active GPS request and reports final failure without stuck loading', async () => {
+    const getCurrentPosition = vi.fn((ok, fail) => fail({ code: 2, message: 'unavailable' }))
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } })
+    const hook = mount({ location: { ...A, dynamic: true } })
+    await flush()
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2)
+    expect(hook.value.loading).toBe(false)
+    expect(hook.value.geoError).toContain('position unavailable')
+    expect(hook.value.sourceStatus['open-meteo'].status).toBe('idle')
+    expect(fetchOpenMeteo).not.toHaveBeenCalled()
+  })
+
   it('aborts on unmount and never commits a late GPS fix', async () => {
     let resolveGPS
     vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: vi.fn(ok => { resolveGPS = ok }) } })
@@ -146,7 +169,7 @@ describe('location scope and refresh triggers', () => {
     expect(hook.value.lastUpdated).toBe(last)
   })
 
-  it('refetches on coordinate, radius, dynamic flag and API key changes, but not label edits', async () => {
+  it('refetches on coordinate, radius and API key changes, but not label edits', async () => {
     const hook = mount()
     await flush()
     hook.update({ location: { ...A, lat: 51 } }); await flush()
@@ -158,6 +181,18 @@ describe('location scope and refresh triggers', () => {
     expect(fetchOpenMeteo).toHaveBeenCalledTimes(4)
     expect(fetchWindy).toHaveBeenCalledTimes(1)
     expect(fetchWindy.mock.calls[0][3]).toBeInstanceOf(AbortSignal)
+  })
+
+  it('resolves GPS when a fixed location becomes dynamic without changing id', async () => {
+    const getCurrentPosition = vi.fn(ok => ok({ coords: { latitude: 10, longitude: 20 } }))
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } })
+    const hook = mount()
+    await flush()
+    hook.update({ location: { ...A, dynamic: true } })
+    await flush()
+    expect(getCurrentPosition).toHaveBeenCalledOnce()
+    expect(fetchOpenMeteo).toHaveBeenCalledTimes(2)
+    expect(fetchOpenMeteo.mock.calls[1].slice(0, 2)).toEqual([10, 20])
   })
 
   it('does not refetch when resolved GPS coordinates or place names are cached in config', async () => {
