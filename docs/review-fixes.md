@@ -1,8 +1,10 @@
-# Code review fixes
+# Code review fixes — 0.2.1 release record
 
 Review baseline: `9879792c81ab8436d0182949c063047abd2e8ee4`.
 
-Apply in priority order; do not merge or deploy until regression checks pass.
+The table records the implementation order and checks for the six review issues.
+They were merged in [PR #58](https://github.com/honzabfu/jz-weatherfusion/pull/58)
+and released as 0.2.1; it is not a list of pending work.
 
 | Issue | Approach | Regression checks |
 | --- | --- | --- |
@@ -19,7 +21,9 @@ no real API keys or geolocation are required.
 
 ## Implemented and verified
 
-All six fixes are implemented on `fix/review-weather-state-config`.
+All six fixes were developed on `fix/review-weather-state-config` and merged to
+`main` as `ace59d181e2358f41af21deed1e86af17d90a2ec`. Issues #52–#57 are closed.
+The counts below describe that release, not every later revision.
 
 - 89 Vitest tests pass (36 existing, 53 new), including real React hook lifecycle
   tests with mocked providers/GPS and a provider abort propagation test.
@@ -33,7 +37,25 @@ All six fixes are implemented on `fix/review-weather-state-config`.
 - The browser checks mock API responses and do not validate live provider CORS
   or real-device geolocation/Safari behavior.
 
-Reproduce the browser checks after building and starting `npm run preview`:
+## Deployment verification
+
+[Pages run 40193415750](https://github.com/honzabfu/jz-weatherfusion/actions/runs/40193415750)
+completed successfully for the merge commit. The deployed JavaScript matched the
+local 0.2.1 build byte for byte; HTML, bundle, manifest and service worker returned
+200. The 21 mocked browser assertions also passed against the public URL.
+
+A separate Chromium check used live Open-Meteo: all three model requests returned
+200, the overview rendered a finite temperature, Settings showed 0.2.1, and the
+service worker activated for `/jz-weatherfusion/`. After fetching under its
+control, an offline reload rendered the app shell and cached weather. There were
+no uncaught page errors. Real-device Safari/iOS and actual GPS were not tested.
+These are historical verification results; the one-off live smoke check is not
+part of the committed regression script.
+
+## Reproduction
+
+See [development.md](development.md) for setup, limitations and current release
+checks. Reproduce mocked browser checks after building and starting preview:
 
 ```sh
 npx playwright install chromium

@@ -1,15 +1,20 @@
-# Cross-platform display verification
+# Cross-platform display verification — historický report
+
+Tento report a přiložené screenshoty/results.json zaznamenávají běh před vydáním
+0.2.1. Nejde o nově provedený test současné verze. Aktuální postup je v
+[development.md](../development.md); ověření vydání 0.2.1 je v
+[review-fixes.md](../review-fixes.md).
 
 Ověření zobrazení aplikace na různých platformách, prohlížečích a velikostech
 displeje. Generováno skriptem [`scripts/verify-display.mjs`](../../scripts/verify-display.mjs).
 
 ## Metodika
 
-- **Nástroj:** Playwright řídí předinstalovaný Chromium (`/opt/pw-browsers/chromium-1194`).
+- **Nástroj:** Při zaznamenaném běhu Playwright řídil předinstalovaný Chromium (`/opt/pw-browsers/chromium-1194`).
 - **App:** produkční build (`npm run build`) servírovaný přes `vite preview`.
 - **Data:** síťové odpovědi Open-Meteo a OpenWeatherMap jsou v testu mockované
   (deterministická, datově bohatá UI nezávislá na síti). Nasazená lokalita: Praha,
-  3 fyzické stanice (OWM) + 3 NWP modely (Open-Meteo).
+  3 položky OWM označené aplikací jako stanice + 3 NWP modely (Open-Meteo).
 - **Pokrytí:** 8 viewportů × 2 motivy (light/dark) × 3 taby (Průměr / Stanice /
   Zdroje) = **48 kontrol**.
 - **Kontrola layoutu:** u každé kombinace se měří horizontální přetečení dokumentu
@@ -17,13 +22,11 @@ displeje. Generováno skriptem [`scripts/verify-display.mjs`](../../scripts/veri
 
 ### Poznámka k prohlížečům
 
-V tomto prostředí je k dispozici pouze engine **Chromium**. Firefox (Gecko) a
-Safari/iOS (WebKit) zde nejsou nainstalované, takže reálné enginy nelze spustit.
-Cílová zařízení jsou proto emulována přes device profily (viewport,
-`deviceScaleFactor`, `isMobile`, `hasTouch`, `prefers-color-scheme`). App je
-čistá React + Vite PWA bez prefix-závislého CSS frameworku a používá běžné
-flex/grid vlastnosti, takže riziko engine-specifických rozdílů je nízké; pro
-plnou jistotu Safari/Firefox doporučujeme manuální dotest na reálných zařízeních.
+Zaznamenaný běh používal pouze **Chromium**, nikoli Firefox/Gecko ani
+Safari/WebKit. Skript mění viewport, `deviceScaleFactor`, `isMobile`, `hasTouch`
+a barevný motiv. Tím neověřuje skutečný engine Safari/Firefox ani reálné zařízení.
+Používá střední velikost písma; nejde o matici všech velikostí písma. Pro ostatní
+prohlížeče a geolokaci je potřeba samostatné ověření.
 
 ## Matice viewportů
 
@@ -48,7 +51,7 @@ plnou jistotu Safari/Firefox doporučujeme manuální dotest na reálných zař�
 Při prvním běhu (s reálnými daty) agregovaný tab na šířce **320 px** přetékal
 vodorovně o **+53 px** v obou motivech. Příčina: hero karta teploty má
 `grid-column: span 2`, což na nejužším displeji vynutilo dvousloupcovou mřížku,
-a širokoé číselné hodnoty (např. tlak „1013.7 hPa" ve fontu 2 rem, bez zalomení)
+a široké číselné hodnoty (např. tlak „1013.7 hPa" ve fontu 2 rem, bez zalomení)
 pak protlačily stopy mřížky přes šířku viewportu.
 
 **Oprava:** mřížka metrik přesunuta z inline stylů do třídy `.metric-grid`
@@ -62,12 +65,25 @@ záměrný vzor, page-level přetečení je nulové.
 
 ## Reprodukce
 
-```bash
+Po `npm ci` nainstalujte Chromium přes `npx playwright install chromium`.
+Sestavte aplikaci a v samostatném terminálu spusťte preview:
+
+```sh
 npm run build
-npm run preview -- --port 4173 &
-node scripts/verify-display.mjs
+npm run preview -- --port 4173
 ```
 
-Skript zapíše screenshoty a `results.json` do `docs/verification/` a vypíše
-souhrn přetečení. Cestu k prohlížeči lze přepsat přes `CHROMIUM_PATH`, URL přes
-`BASE_URL`.
+Ve druhém terminálu předejte cestu k právě nainstalovanému Chromiu:
+
+```sh
+CHROMIUM_PATH="$(node --input-type=module -e "import { chromium } from 'playwright'; console.log(chromium.executablePath())")" node scripts/verify-display.mjs
+```
+
+Bez `CHROMIUM_PATH` skript stále používá historickou cestu
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, která nemusí existovat.
+URL lze přepsat přes `BASE_URL`.
+
+Skript přepíše screenshoty a `results.json` v této složce. Výsledky a změny obrázků
+zkontrolujte před commitem. Při nalezení přetečení ho skript pouze vypíše a uloží;
+nevrací kvůli němu nenulový exit code. Samotný úspěšný běh procesu tedy není
+potvrzením nulového přetečení. Tento dokument se skriptem automaticky nepřepisuje.
